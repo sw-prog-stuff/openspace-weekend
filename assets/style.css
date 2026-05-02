@@ -69,6 +69,10 @@ body:not(.is-admin) .nav-admin { display: none; }
 .user-pick:hover { border-color: var(--ink-dim); color: var(--ink); }
 .user-pick.active { border-color: var(--cyan); color: var(--cyan); box-shadow: 0 0 12px rgba(0,240,255,0.3); background: rgba(0,240,255,0.05); }
 .error-msg { color: var(--danger); font-size: 0.9rem; margin: 0; }
+.time-row { display: flex; gap: 1rem; }
+.time-row label { flex: 1; }
+.sessions-actions { margin-bottom: 1rem; }
+.slot .notes { margin-top: 0.4rem; line-height: 1.4; white-space: pre-wrap; }
 
 main { position: relative; z-index: 1; padding: 2.5rem 2rem 4rem; max-width: 1200px; margin: 0 auto; }
 .view.hidden { display: none; }

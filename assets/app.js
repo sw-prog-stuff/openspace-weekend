@@ -268,50 +268,51 @@ async function addProposal(data) {
   } catch (e) { toast('Speichern fehlgeschlagen: ' + e.message, true); }
 }
 
+function sessionStart(s) { return s.start || s.slotStart || ''; }
+function sessionEnd(s) {
+  if (s.end) return s.end;
+  const st = new Date(sessionStart(s));
+  const min = Number(state.config?.slotMinutes) || 60;
+  return new Date(st.getTime() + min * 60000).toISOString();
+}
+
 function renderSessions() {
   const root = $('#slots');
   const meta = $('#sessions-meta');
   if (!state.config.start || !state.config.end) {
-    root.innerHTML = '<p class="muted">Noch keine Zeiten gesetzt — bitte in <a href="#settings" style="color:var(--cyan)">Settings</a> festlegen.</p>';
     meta.textContent = '';
+    root.innerHTML = '<p class="muted">Noch keine Randzeiten gesetzt — Sven muss in Settings einen Zeitrahmen festlegen.</p>';
     return;
   }
-  const start = new Date(state.config.start);
-  const end = new Date(state.config.end);
-  const slotMin = Number(state.config.slotMinutes) || 60;
-  if (!(start < end)) {
-    root.innerHTML = '<p class="muted">Endzeit muss nach Startzeit liegen.</p>';
-    meta.textContent = '';
-    return;
-  }
-  meta.textContent = `${fmtDay(start)} ${fmtTime(start)} → ${fmtDay(end)} ${fmtTime(end)} · Slots à ${slotMin} min`;
+  const cfgStart = new Date(state.config.start);
+  const cfgEnd = new Date(state.config.end);
+  meta.textContent = `${fmtDay(cfgStart)} ${fmtTime(cfgStart)} → ${fmtDay(cfgEnd)} ${fmtTime(cfgEnd)} · Sessions frei wählbar`;
 
-  const slots = [];
-  let cur = new Date(start);
-  let guard = 0;
-  while (cur < end && guard++ < 200) {
-    const next = new Date(cur.getTime() + slotMin * 60000);
-    slots.push({ start: new Date(cur), end: new Date(Math.min(next.getTime(), end.getTime())) });
-    cur = next;
+  const sessions = [...(state.sessions.sessions || [])]
+    .sort((a, b) => sessionStart(a).localeCompare(sessionStart(b)));
+
+  if (sessions.length === 0) {
+    root.innerHTML = '<p class="muted">Noch keine Sessions. Klick oben auf „+ Neue Session", um die erste zu setzen.</p>';
+    return;
   }
+
   let html = '';
   let lastDay = '';
-  for (const s of slots) {
-    const dayKey = s.start.toDateString();
+  for (const s of sessions) {
+    const st = new Date(sessionStart(s));
+    const en = new Date(sessionEnd(s));
+    const dayKey = st.toDateString();
     if (dayKey !== lastDay) {
-      html += `<div class="day-header">${fmtDay(s.start)}</div>`;
+      html += `<div class="day-header">${fmtDay(st)}</div>`;
       lastDay = dayKey;
     }
-    const session = state.sessions.sessions.find(x => x.slotStart === s.start.toISOString());
-    const filled = !!session;
     html += `
-      <div class="slot ${filled ? 'filled' : ''}" data-start="${s.start.toISOString()}">
-        <div class="time">${fmtTime(s.start)} – ${fmtTime(s.end)}</div>
+      <div class="slot filled" data-id="${s.id}">
+        <div class="time">${fmtTime(st)} – ${fmtTime(en)}</div>
         <div class="body">
-          ${filled
-            ? `<div class="title">${escapeHtml(session.title)}</div>
-               <div class="owner">→ ${escapeHtml(session.owner)}</div>`
-            : `<div class="empty">+ leer · klicken zum Befüllen</div>`}
+          <div class="title">${escapeHtml(s.title || '')}</div>
+          <div class="owner">→ ${escapeHtml(s.owner || '')}</div>
+          ${s.notes ? `<div class="notes muted small">${escapeHtml(s.notes)}</div>` : ''}
         </div>
       </div>`;
   }
@@ -452,24 +453,62 @@ $('#proposals').addEventListener('click', e => {
   if (btn) toggleVote(btn.dataset.vote);
 });
 
-$('#slots').addEventListener('click', e => {
-  const slot = e.target.closest('.slot');
-  if (!slot) return;
-  if (!state.identity.name) { openLogin(); return; }
-  const start = slot.dataset.start;
-  const session = state.sessions.sessions.find(x => x.slotStart === start);
+function openSessionDialog(session) {
   const dlg = $('#dlg-session');
   const f = dlg.querySelector('form');
   f.reset();
+  $('#session-error').hidden = true;
   $('#dlg-session-title').textContent = session ? 'Session bearbeiten' : 'Neue Session';
   f.elements.id.value = session?.id || '';
-  f.elements.slotStart.value = start;
+
+  const cfgStart = state.config.start ? new Date(state.config.start) : new Date();
+  const cfgEnd = state.config.end ? new Date(state.config.end) : new Date(cfgStart.getTime() + 24*60*60000);
+  const defaultMin = Number(state.config?.slotMinutes) || 60;
+
+  let dStart, dEnd;
+  if (session) {
+    dStart = new Date(sessionStart(session));
+    dEnd = new Date(sessionEnd(session));
+  } else {
+    const sessions = state.sessions.sessions || [];
+    let lastEnd = cfgStart.getTime();
+    for (const s of sessions) {
+      const e = new Date(sessionEnd(s)).getTime();
+      if (e > lastEnd) lastEnd = e;
+    }
+    dStart = new Date(Math.min(lastEnd, cfgEnd.getTime() - defaultMin * 60000));
+    if (dStart < cfgStart) dStart = cfgStart;
+    dEnd = new Date(Math.min(dStart.getTime() + defaultMin * 60000, cfgEnd.getTime()));
+  }
+
+  f.elements.start.value = toLocalInput(dStart.toISOString());
+  f.elements.end.value = toLocalInput(dEnd.toISOString());
+  f.elements.start.min = toLocalInput(cfgStart.toISOString());
+  f.elements.start.max = toLocalInput(cfgEnd.toISOString());
+  f.elements.end.min = toLocalInput(cfgStart.toISOString());
+  f.elements.end.max = toLocalInput(cfgEnd.toISOString());
   f.elements.title.value = session?.title || '';
   f.elements.owner.value = session?.owner || state.identity.name;
   f.elements.notes.value = session?.notes || '';
   f.querySelector('[data-only-existing]').style.display = session ? '' : 'none';
   dlg.showModal();
+}
+
+document.addEventListener('click', e => {
+  if (e.target.id === 'btn-new-session') {
+    if (!state.identity.name) { openLogin(); return; }
+    openSessionDialog(null);
+  }
 });
+
+$('#slots').addEventListener('click', e => {
+  const slot = e.target.closest('[data-id]');
+  if (!slot) return;
+  if (!state.identity.name) { openLogin(); return; }
+  const session = state.sessions.sessions.find(x => x.id === slot.dataset.id);
+  if (session) openSessionDialog(session);
+});
+
 $('#dlg-session').addEventListener('close', e => {
   const ret = e.target.returnValue;
   const f = e.target.querySelector('form');
@@ -477,10 +516,17 @@ $('#dlg-session').addEventListener('close', e => {
   const id = fd.get('id');
   if (ret === 'delete' && id) { deleteSession(id); return; }
   if (ret !== 'ok') return;
-  if (!fd.get('title') || !fd.get('owner')) return;
+  const start = fd.get('start');
+  const end = fd.get('end');
+  if (!start || !end || !fd.get('title') || !fd.get('owner')) return;
+  if (new Date(start) >= new Date(end)) {
+    toast('Ende muss nach Start liegen', true);
+    return;
+  }
   saveSession({
     id: id || undefined,
-    slotStart: fd.get('slotStart'),
+    start: new Date(start).toISOString(),
+    end: new Date(end).toISOString(),
     title: fd.get('title'),
     owner: fd.get('owner'),
     notes: fd.get('notes') || '',

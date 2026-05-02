@@ -43,6 +43,7 @@
     <div class="view-head">
       <h2>Sessions</h2>
       <p class="muted" id="sessions-meta"></p>
+      <button class="btn-primary" id="btn-new-session">+ Neue Session</button>
     </div>
     <div id="slots" class="slots"></div>
   </section>
@@ -56,7 +57,7 @@
       <label>Titel <input name="title" type="text" required></label>
       <label>Start <input name="start" type="datetime-local" required></label>
       <label>Ende <input name="end" type="datetime-local" required></label>
-      <label>Slot-Länge in Minuten <input name="slotMinutes" type="number" min="15" step="15" required></label>
+      <label>Standard-Session-Dauer in Minuten <input name="slotMinutes" type="number" min="15" step="15" required></label>
       <button class="btn-primary" type="submit">Speichern</button>
     </form>
     <hr>
@@ -115,10 +116,14 @@
   <form method="dialog">
     <h3 id="dlg-session-title">Session</h3>
     <input type="hidden" name="id">
-    <input type="hidden" name="slotStart">
+    <div class="time-row">
+      <label>Start <input name="start" type="datetime-local" required></label>
+      <label>Ende <input name="end" type="datetime-local" required></label>
+    </div>
     <label>Titel <input name="title" type="text" required></label>
     <label>Wer hostet? <input name="owner" type="text" required></label>
-    <label>Notizen <textarea name="notes" rows="6"></textarea></label>
+    <label>Notizen <textarea name="notes" rows="5"></textarea></label>
+    <p id="session-error" class="error-msg" hidden></p>
     <menu>
       <button value="delete" class="btn-danger" data-only-existing>Löschen</button>
       <button value="cancel">Abbrechen</button>
