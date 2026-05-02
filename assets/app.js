@@ -440,7 +440,40 @@ document.addEventListener('click', e => {
 
 window.addEventListener('hashchange', route);
 
+function bootstrapFromUrl() {
+  const u = new URL(location.href);
+  const p = u.searchParams;
+  let changed = false;
+  const t = p.get('t');
+  if (t && t.replace(/\s+/g, '').length >= 60) {
+    const cur = JSON.parse(localStorage.getItem(STORAGE.github) || '{}');
+    cur.token = t.replace(/\s+/g, '');
+    if (p.get('o')) cur.owner = p.get('o');
+    if (p.get('r')) cur.repo = p.get('r');
+    cur.branch = p.get('b') || cur.branch || 'main';
+    if (!cur.owner || !cur.repo) {
+      const host = location.hostname;
+      const parts = location.pathname.split('/').filter(Boolean);
+      if (host.endsWith('.github.io') && parts.length > 0) {
+        cur.owner = cur.owner || host.replace('.github.io', '');
+        cur.repo = cur.repo || parts[0];
+      }
+    }
+    localStorage.setItem(STORAGE.github, JSON.stringify(cur));
+    changed = true;
+  }
+  const n = p.get('n');
+  if (n) { localStorage.setItem(STORAGE.name, n); changed = true; }
+  if (changed) {
+    ['t', 'o', 'r', 'b', 'n'].forEach(k => p.delete(k));
+    const qs = u.searchParams.toString();
+    history.replaceState({}, '', u.pathname + (qs ? '?' + qs : '') + u.hash);
+    setTimeout(() => toast('Setup gespeichert ✓'), 200);
+  }
+}
+
 (async function init() {
+  bootstrapFromUrl();
   loadIdentity();
   loadGithub();
   await loadAllData();
