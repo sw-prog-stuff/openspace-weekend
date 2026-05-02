@@ -20,11 +20,12 @@
   <nav>
     <a href="#vision" class="nav-link">Vision</a>
     <a href="#sessions" class="nav-link">Sessions</a>
-    <a href="#settings" class="nav-link">Settings</a>
+    <a href="#settings" class="nav-link nav-admin">Settings</a>
   </nav>
   <div class="who">
     <span id="who-name">—</span>
-    <button id="btn-identity" class="btn-ghost">Wer bist du?</button>
+    <span id="who-role" class="role-badge"></span>
+    <button id="btn-logout" class="btn-ghost" hidden>Abmelden</button>
   </div>
 </header>
 
@@ -78,12 +79,20 @@
   </section>
 </main>
 
-<dialog id="dlg-identity">
-  <form method="dialog">
+<dialog id="dlg-login">
+  <form id="form-login" autocomplete="off">
     <h3>Wer bist du?</h3>
-    <label>Name <input name="name" type="text" required></label>
+    <div class="user-picker">
+      <button type="button" class="user-pick" data-user="Sven">Sven</button>
+      <button type="button" class="user-pick" data-user="Chris">Chris</button>
+      <button type="button" class="user-pick" data-user="Thomas">Thomas</button>
+    </div>
+    <label>Passwort
+      <input name="password" type="password" required autocomplete="off">
+    </label>
+    <p id="login-error" class="error-msg" hidden></p>
     <menu>
-      <button class="btn-primary" type="submit" value="ok">OK</button>
+      <button class="btn-primary" type="submit">Login</button>
     </menu>
   </form>
 </dialog>

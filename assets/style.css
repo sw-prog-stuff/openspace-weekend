@@ -61,6 +61,14 @@ nav { display: flex; gap: 1.75rem; }
 .nav-link.active { color: var(--cyan); border-bottom-color: var(--cyan); }
 .who { display: flex; align-items: center; gap: 0.75rem; font-size: 0.9rem; color: var(--ink-dim); }
 .who #who-name { color: var(--ink); font-family: 'JetBrains Mono', monospace; font-size: 0.9rem; }
+.role-badge { font-family: 'JetBrains Mono', monospace; font-size: 0.7rem; padding: 0.15rem 0.5rem; border: 1px solid var(--cyan); color: var(--cyan); border-radius: 3px; letter-spacing: 0.1em; text-transform: uppercase; }
+.role-badge:empty { display: none; }
+body:not(.is-admin) .nav-admin { display: none; }
+.user-picker { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.25rem; }
+.user-pick { flex: 1; padding: 0.9rem; border: 1px solid var(--line); background: var(--bg); color: var(--ink); font-size: 1rem; }
+.user-pick:hover { border-color: var(--ink-dim); color: var(--ink); }
+.user-pick.active { border-color: var(--cyan); color: var(--cyan); box-shadow: 0 0 12px rgba(0,240,255,0.3); background: rgba(0,240,255,0.05); }
+.error-msg { color: var(--danger); font-size: 0.9rem; margin: 0; }
 
 main { position: relative; z-index: 1; padding: 2.5rem 2rem 4rem; max-width: 1200px; margin: 0 auto; }
 .view.hidden { display: none; }

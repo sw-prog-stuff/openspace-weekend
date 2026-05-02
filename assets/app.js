@@ -4,11 +4,17 @@ const STORAGE = {
   github: 'os.github',
 };
 
+const USERS = {
+  Sven:   { admin: true,  password: 'WE!' },
+  Chris:  { admin: false, password: 'WE!' },
+  Thomas: { admin: false, password: 'WE!' },
+};
+
 const state = {
   config: null,
   vision: { proposals: [], votes: {} },
   sessions: { sessions: [] },
-  identity: { name: '', voterId: '' },
+  identity: { name: '', voterId: '', admin: false },
   github: { owner: '', repo: '', branch: 'main', token: '' },
 };
 
@@ -39,16 +45,23 @@ function toLocalInput(iso) {
 }
 
 function loadIdentity() {
-  state.identity.name = localStorage.getItem(STORAGE.name) || '';
+  const stored = localStorage.getItem(STORAGE.name) || '';
+  state.identity.name = USERS[stored] ? stored : '';
   let vid = localStorage.getItem(STORAGE.voterId);
   if (!vid) { vid = uid(); localStorage.setItem(STORAGE.voterId, vid); }
   state.identity.voterId = vid;
-  $('#who-name').textContent = state.identity.name || '—';
 }
-function setName(n) {
-  state.identity.name = n;
-  localStorage.setItem(STORAGE.name, n);
-  $('#who-name').textContent = n || '—';
+
+function applyIdentity() {
+  const u = USERS[state.identity.name];
+  state.identity.admin = !!u?.admin;
+  $('#who-name').textContent = state.identity.name || '—';
+  const rb = $('#who-role');
+  if (rb) rb.textContent = state.identity.admin ? 'admin' : (state.identity.name ? 'user' : '');
+  const lo = $('#btn-logout');
+  if (lo) lo.hidden = !state.identity.name;
+  document.body.classList.toggle('is-admin', state.identity.admin);
+  if (!state.identity.admin && location.hash === '#settings') location.hash = '#vision';
 }
 
 function loadGithub() {
@@ -91,38 +104,46 @@ async function loadAllData() {
   }
 }
 
-async function ghWriteFile(path, content, message) {
-  const { owner, repo, branch, token } = state.github;
+function ghCheck() {
+  const { owner, repo, token } = state.github;
   if (!owner || !repo || !token) {
     toast('GitHub-Settings fehlen — siehe Settings', true);
     location.hash = '#settings';
     throw new Error('no github config');
   }
   if (token.length < 60) {
-    toast(`Token im Browser nur ${token.length} Zeichen — Paste war unvollständig. Settings → Token nochmal pasten.`, true);
+    toast(`Token nur ${token.length} Zeichen — unvollständig. Settings → Token neu pasten.`, true);
     location.hash = '#settings';
     throw new Error('token truncated');
   }
-  const url = `https://api.github.com/repos/${owner}/${repo}/contents/${path}`;
-  let sha;
-  const getR = await fetch(url + '?ref=' + encodeURIComponent(branch), {
+}
+
+async function ghReadJson(path) {
+  ghCheck();
+  const { owner, repo, branch, token } = state.github;
+  const url = `https://api.github.com/repos/${owner}/${repo}/contents/${path}?ref=${encodeURIComponent(branch)}&t=${Date.now()}`;
+  const r = await fetch(url, {
     headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/vnd.github+json' },
+    cache: 'no-store',
   });
-  if (getR.status === 401) {
-    throw new Error('401 — Token ungültig (revoked oder Tippfehler). Settings → Verbindung testen.');
-  }
-  if (getR.ok) {
-    sha = (await getR.json()).sha;
-  } else if (getR.status !== 404) {
-    throw new Error('GET ' + getR.status);
-  }
+  if (r.status === 404) return null;
+  if (r.status === 401) throw new Error('401 — Token ungültig (revoked?)');
+  if (!r.ok) throw new Error('GET ' + r.status);
+  const j = await r.json();
+  const text = decodeURIComponent(escape(atob((j.content || '').replace(/\n/g, ''))));
+  return { data: JSON.parse(text || 'null'), sha: j.sha };
+}
+
+async function ghPutJson(path, data, message, sha) {
+  const { owner, repo, branch, token } = state.github;
+  const url = `https://api.github.com/repos/${owner}/${repo}/contents/${path}`;
   const body = {
     message,
-    content: btoa(unescape(encodeURIComponent(content))),
     branch,
+    content: btoa(unescape(encodeURIComponent(JSON.stringify(data, null, 2)))),
   };
   if (sha) body.sha = sha;
-  const putR = await fetch(url, {
+  const r = await fetch(url, {
     method: 'PUT',
     headers: {
       'Authorization': `Bearer ${token}`,
@@ -131,21 +152,45 @@ async function ghWriteFile(path, content, message) {
     },
     body: JSON.stringify(body),
   });
-  if (!putR.ok) {
-    throw new Error('PUT ' + putR.status + ' ' + (await putR.text()));
-  }
+  if (r.ok) return { ok: true };
+  const text = await r.text();
+  return { ok: false, status: r.status, text };
 }
 
-async function saveData(kind) {
-  const map = {
-    config: ['data/config.json', state.config, 'update config'],
-    vision: ['data/vision.json', state.vision, 'update vision'],
-    sessions: ['data/sessions.json', state.sessions, 'update sessions'],
-  };
-  const [path, data, msg] = map[kind];
-  const text = JSON.stringify(data, null, 2);
-  await ghWriteFile(path, text, msg);
-  toast('Gespeichert');
+const PATHS = {
+  config: 'data/config.json',
+  vision: 'data/vision.json',
+  sessions: 'data/sessions.json',
+};
+const FALLBACK = {
+  config: { title: 'OpenSpace', start: '', end: '', slotMinutes: 60 },
+  vision: { proposals: [], votes: {} },
+  sessions: { sessions: [] },
+};
+
+async function saveMerged(kind, mutate) {
+  ghCheck();
+  const path = PATHS[kind];
+  const msg = `update ${kind}`;
+  let lastErr = '';
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const fresh = await ghReadJson(path);
+    const cur = fresh?.data ?? structuredClone(FALLBACK[kind]);
+    const next = mutate(structuredClone(cur));
+    state[kind] = next;
+    if (kind === 'vision') renderVision();
+    else if (kind === 'sessions') renderSessions();
+    const r = await ghPutJson(path, next, msg, fresh?.sha);
+    if (r.ok) { toast('Gespeichert'); return; }
+    if (r.status === 409) {
+      lastErr = '409 conflict, retry ' + (attempt + 1);
+      await new Promise(res => setTimeout(res, 200 + Math.random() * 300));
+      continue;
+    }
+    if (r.status === 401) throw new Error('401 — Token ungültig');
+    throw new Error('PUT ' + r.status + ' ' + r.text);
+  }
+  throw new Error('Konflikt — ' + lastErr + '. Seite neu laden und nochmal.');
 }
 
 function route() {
@@ -191,12 +236,17 @@ function renderVision() {
 }
 
 async function toggleVote(pid) {
-  if (!state.identity.name) { openIdentity(); return; }
-  const arr = state.vision.votes[pid] || (state.vision.votes[pid] = []);
-  const i = arr.indexOf(state.identity.voterId);
-  if (i >= 0) arr.splice(i, 1); else arr.push(state.identity.voterId);
-  renderVision();
-  try { await saveData('vision'); } catch (e) { toast('Vote-Fehler: ' + e.message, true); }
+  if (!state.identity.name) { openLogin(); return; }
+  const myId = state.identity.voterId;
+  try {
+    await saveMerged('vision', v => {
+      v.votes ||= {};
+      const arr = v.votes[pid] = v.votes[pid] || [];
+      const i = arr.indexOf(myId);
+      if (i >= 0) arr.splice(i, 1); else arr.push(myId);
+      return v;
+    });
+  } catch (e) { toast('Vote-Fehler: ' + e.message, true); }
 }
 
 async function addProposal(data) {
@@ -209,9 +259,13 @@ async function addProposal(data) {
     vision: (data.vision || '').trim(),
     createdAt: new Date().toISOString(),
   };
-  state.vision.proposals.push(p);
-  renderVision();
-  try { await saveData('vision'); } catch (e) { toast('Speichern fehlgeschlagen: ' + e.message, true); }
+  try {
+    await saveMerged('vision', v => {
+      v.proposals ||= [];
+      v.proposals.push(p);
+      return v;
+    });
+  } catch (e) { toast('Speichern fehlgeschlagen: ' + e.message, true); }
 }
 
 function renderSessions() {
@@ -265,20 +319,23 @@ function renderSessions() {
 }
 
 async function saveSession(data) {
-  const sessions = state.sessions.sessions;
-  const idx = data.id ? sessions.findIndex(x => x.id === data.id) : -1;
-  if (idx >= 0) {
-    sessions[idx] = { ...sessions[idx], ...data };
-  } else {
-    sessions.push({ ...data, id: uid(), createdAt: new Date().toISOString() });
-  }
-  renderSessions();
-  try { await saveData('sessions'); } catch (e) { toast('Speichern fehlgeschlagen: ' + e.message, true); }
+  try {
+    await saveMerged('sessions', s => {
+      s.sessions ||= [];
+      const idx = data.id ? s.sessions.findIndex(x => x.id === data.id) : -1;
+      if (idx >= 0) s.sessions[idx] = { ...s.sessions[idx], ...data };
+      else s.sessions.push({ ...data, id: uid(), createdAt: new Date().toISOString() });
+      return s;
+    });
+  } catch (e) { toast('Speichern fehlgeschlagen: ' + e.message, true); }
 }
 async function deleteSession(id) {
-  state.sessions.sessions = state.sessions.sessions.filter(x => x.id !== id);
-  renderSessions();
-  try { await saveData('sessions'); } catch (e) { toast('Löschen fehlgeschlagen: ' + e.message, true); }
+  try {
+    await saveMerged('sessions', s => {
+      s.sessions = (s.sessions || []).filter(x => x.id !== id);
+      return s;
+    });
+  } catch (e) { toast('Löschen fehlgeschlagen: ' + e.message, true); }
 }
 
 function renderSettings() {
@@ -326,20 +383,54 @@ async function testConnection() {
   }
 }
 
-function openIdentity() {
-  const dlg = $('#dlg-identity');
-  dlg.querySelector('input[name=name]').value = state.identity.name;
+let _pickedUser = '';
+function openLogin() {
+  const dlg = $('#dlg-login');
+  $('#login-error').hidden = true;
+  $('#dlg-login input[name=password]').value = '';
+  _pickedUser = '';
+  $$('.user-pick').forEach(b => b.classList.remove('active'));
   dlg.showModal();
 }
 
-$('#btn-identity').addEventListener('click', openIdentity);
-$('#dlg-identity').addEventListener('close', e => {
-  const v = e.target.querySelector('input[name=name]').value.trim();
-  if (v) setName(v);
+document.addEventListener('click', e => {
+  const b = e.target.closest('.user-pick');
+  if (!b) return;
+  _pickedUser = b.dataset.user;
+  $$('.user-pick').forEach(x => x.classList.toggle('active', x === b));
+  $('#dlg-login input[name=password]').focus();
+});
+
+$('#form-login').addEventListener('submit', e => {
+  e.preventDefault();
+  const pw = $('#dlg-login input[name=password]').value;
+  const err = $('#login-error');
+  if (!_pickedUser || !USERS[_pickedUser]) {
+    err.textContent = 'Bitte einen Namen wählen';
+    err.hidden = false; return;
+  }
+  if (USERS[_pickedUser].password !== pw) {
+    err.textContent = 'Falsches Passwort';
+    err.hidden = false; return;
+  }
+  state.identity.name = _pickedUser;
+  localStorage.setItem(STORAGE.name, _pickedUser);
+  applyIdentity();
+  $('#dlg-login').close();
+  route();
+});
+
+document.addEventListener('click', e => {
+  if (e.target.id === 'btn-logout') {
+    state.identity.name = '';
+    localStorage.removeItem(STORAGE.name);
+    applyIdentity();
+    openLogin();
+  }
 });
 
 $('#btn-new-proposal').addEventListener('click', () => {
-  if (!state.identity.name) { openIdentity(); return; }
+  if (!state.identity.name) { openLogin(); return; }
   const dlg = $('#dlg-proposal');
   dlg.querySelector('form').reset();
   dlg.showModal();
@@ -364,7 +455,7 @@ $('#proposals').addEventListener('click', e => {
 $('#slots').addEventListener('click', e => {
   const slot = e.target.closest('.slot');
   if (!slot) return;
-  if (!state.identity.name) { openIdentity(); return; }
+  if (!state.identity.name) { openLogin(); return; }
   const start = slot.dataset.start;
   const session = state.sessions.sessions.find(x => x.slotStart === start);
   const dlg = $('#dlg-session');
@@ -399,17 +490,16 @@ $('#dlg-session').addEventListener('close', e => {
 $('#form-settings').addEventListener('submit', async e => {
   e.preventDefault();
   const fd = new FormData(e.target);
-  const startLocal = fd.get('start');
-  const endLocal = fd.get('end');
-  state.config = {
+  const newConfig = {
     title: fd.get('title'),
-    start: new Date(startLocal).toISOString(),
-    end: new Date(endLocal).toISOString(),
+    start: new Date(fd.get('start')).toISOString(),
+    end: new Date(fd.get('end')).toISOString(),
     slotMinutes: parseInt(fd.get('slotMinutes'), 10),
   };
-  $('#title').textContent = state.config.title;
-  document.title = state.config.title;
-  try { await saveData('config'); } catch (err) { toast('Speichern fehlgeschlagen: ' + err.message, true); }
+  $('#title').textContent = newConfig.title;
+  document.title = newConfig.title;
+  try { await saveMerged('config', () => newConfig); }
+  catch (err) { toast('Speichern fehlgeschlagen: ' + err.message, true); }
 });
 
 $('#form-github').addEventListener('submit', e => {
@@ -476,7 +566,8 @@ function bootstrapFromUrl() {
   bootstrapFromUrl();
   loadIdentity();
   loadGithub();
+  applyIdentity();
   await loadAllData();
   route();
-  if (!state.identity.name) openIdentity();
+  if (!state.identity.name) openLogin();
 })();
