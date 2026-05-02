@@ -59,13 +59,20 @@
       <button class="btn-primary" type="submit">Speichern</button>
     </form>
     <hr>
-    <form id="form-github" class="form">
+    <form id="form-github" class="form" autocomplete="off">
       <h3>GitHub-Verbindung</h3>
-      <label>Owner <input name="owner" type="text" placeholder="dein-github-name"></label>
-      <label>Repo <input name="repo" type="text" placeholder="openspace-weekend"></label>
-      <label>Branch <input name="branch" type="text" value="main"></label>
-      <label>Personal Access Token <input name="token" type="password" placeholder="github_pat_…"></label>
-      <button class="btn-primary" type="submit">Speichern</button>
+      <label>Owner <input name="owner" type="text" placeholder="dein-github-name" autocomplete="off"></label>
+      <label>Repo <input name="repo" type="text" placeholder="openspace-weekend" autocomplete="off"></label>
+      <label>Branch <input name="branch" type="text" value="main" autocomplete="off"></label>
+      <label>
+        Personal Access Token
+        <textarea name="token" rows="3" placeholder="github_pat_…" autocomplete="off" spellcheck="false" data-lpignore="true" data-1p-ignore></textarea>
+        <span class="muted small" id="token-len">0 Zeichen</span>
+      </label>
+      <div class="form-actions">
+        <button class="btn-primary" type="submit">Speichern</button>
+        <button type="button" id="btn-test-conn">Verbindung testen</button>
+      </div>
       <p class="muted small">Token bleibt nur in deinem Browser (localStorage). Scope: <code>Contents = Read &amp; write</code> auf diesem einen Repo.</p>
     </form>
   </section>

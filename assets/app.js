@@ -98,11 +98,19 @@ async function ghWriteFile(path, content, message) {
     location.hash = '#settings';
     throw new Error('no github config');
   }
+  if (token.length < 60) {
+    toast(`Token im Browser nur ${token.length} Zeichen — Paste war unvollständig. Settings → Token nochmal pasten.`, true);
+    location.hash = '#settings';
+    throw new Error('token truncated');
+  }
   const url = `https://api.github.com/repos/${owner}/${repo}/contents/${path}`;
   let sha;
   const getR = await fetch(url + '?ref=' + encodeURIComponent(branch), {
     headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/vnd.github+json' },
   });
+  if (getR.status === 401) {
+    throw new Error('401 — Token ungültig (revoked oder Tippfehler). Settings → Verbindung testen.');
+  }
   if (getR.ok) {
     sha = (await getR.json()).sha;
   } else if (getR.status !== 404) {
@@ -284,6 +292,38 @@ function renderSettings() {
   g.repo.value = state.github.repo || '';
   g.branch.value = state.github.branch || 'main';
   g.token.value = state.github.token || '';
+  updateTokenLen();
+}
+
+function updateTokenLen() {
+  const ta = $('#form-github [name=token]');
+  const span = $('#token-len');
+  if (!ta || !span) return;
+  const n = (ta.value || '').trim().length;
+  span.textContent = `${n} Zeichen` + (n === 0 ? '' : n < 80 ? ' · zu kurz, fine-grained PATs sind ~93' : ' · ok');
+  span.classList.toggle('ok', n >= 80);
+  span.classList.toggle('bad', n > 0 && n < 80);
+}
+
+async function testConnection() {
+  const { owner, repo, branch, token } = state.github;
+  if (!owner || !repo || !token) { toast('Owner / Repo / Token fehlen', true); return; }
+  toast('Teste Verbindung …');
+  try {
+    const r1 = await fetch(`https://api.github.com/repos/${owner}/${repo}`, {
+      headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/vnd.github+json' },
+    });
+    if (r1.status === 401) { toast('✗ 401 — Token ungültig oder revoked', true); return; }
+    if (r1.status === 404) { toast('✗ 404 — Repo nicht gefunden oder Token hat keinen Zugriff', true); return; }
+    if (!r1.ok) { toast('✗ Repo-Check ' + r1.status, true); return; }
+    const r2 = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/data/vision.json?ref=${encodeURIComponent(branch)}`, {
+      headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/vnd.github+json' },
+    });
+    if (!r2.ok && r2.status !== 404) { toast('✗ Contents-Read ' + r2.status, true); return; }
+    toast('✓ Verbindung ok — Lese-Zugriff bestätigt');
+  } catch (e) {
+    toast('✗ Netzwerk-Fehler: ' + e.message, true);
+  }
 }
 
 function openIdentity() {
@@ -375,14 +415,27 @@ $('#form-settings').addEventListener('submit', async e => {
 $('#form-github').addEventListener('submit', e => {
   e.preventDefault();
   const fd = new FormData(e.target);
+  const token = (fd.get('token') || '').replace(/\s+/g, '');
+  if (token && token.length < 60) {
+    toast(`Token zu kurz (${token.length}) — Paste hat geklemmt. Nochmal sauber pasten.`, true);
+    return;
+  }
   state.github = {
     owner: (fd.get('owner') || '').trim(),
     repo: (fd.get('repo') || '').trim(),
     branch: (fd.get('branch') || '').trim() || 'main',
-    token: (fd.get('token') || '').trim(),
+    token,
   };
   saveGithub();
   toast('GitHub-Verbindung gespeichert');
+});
+
+document.addEventListener('input', e => {
+  if (e.target.matches('#form-github [name=token]')) updateTokenLen();
+});
+
+document.addEventListener('click', e => {
+  if (e.target.id === 'btn-test-conn') testConnection();
 });
 
 window.addEventListener('hashchange', route);
