@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>OpenSpace Wochenende</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<div class="bg-grid"></div>
+
+<header>
+  <div class="brand">
+    <span class="logo">◇</span>
+    <h1 id="title">OpenSpace</h1>
+  </div>
+  <nav>
+    <a href="#vision" class="nav-link">Vision</a>
+    <a href="#sessions" class="nav-link">Sessions</a>
+    <a href="#settings" class="nav-link">Settings</a>
+  </nav>
+  <div class="who">
+    <span id="who-name">—</span>
+    <button id="btn-identity" class="btn-ghost">Wer bist du?</button>
+  </div>
+</header>
+
+<main>
+  <section id="view-vision" class="view">
+    <div class="view-head">
+      <h2>Vision</h2>
+      <p class="muted">Vorschläge für Motto, Überschrift, Ziele, Vision. Vote für den heißen Scheiß.</p>
+      <button class="btn-primary" id="btn-new-proposal">+ Neuer Vorschlag</button>
+    </div>
+    <div id="proposals" class="proposals"></div>
+  </section>
+
+  <section id="view-sessions" class="view hidden">
+    <div class="view-head">
+      <h2>Sessions</h2>
+      <p class="muted" id="sessions-meta"></p>
+    </div>
+    <div id="slots" class="slots"></div>
+  </section>
+
+  <section id="view-settings" class="view hidden">
+    <div class="view-head">
+      <h2>Settings</h2>
+    </div>
+    <form id="form-settings" class="form">
+      <h3>Zeitrahmen</h3>
+      <label>Titel <input name="title" type="text" required></label>
+      <label>Start <input name="start" type="datetime-local" required></label>
+      <label>Ende <input name="end" type="datetime-local" required></label>
+      <label>Slot-Länge in Minuten <input name="slotMinutes" type="number" min="15" step="15" required></label>
+      <button class="btn-primary" type="submit">Speichern</button>
+    </form>
+    <hr>
+    <form id="form-github" class="form">
+      <h3>GitHub-Verbindung</h3>
+      <label>Owner <input name="owner" type="text" placeholder="dein-github-name"></label>
+      <label>Repo <input name="repo" type="text" placeholder="openspace-weekend"></label>
+      <label>Branch <input name="branch" type="text" value="main"></label>
+      <label>Personal Access Token <input name="token" type="password" placeholder="github_pat_…"></label>
+      <button class="btn-primary" type="submit">Speichern</button>
+      <p class="muted small">Token bleibt nur in deinem Browser (localStorage). Scope: <code>Contents = Read &amp; write</code> auf diesem einen Repo.</p>
+    </form>
+  </section>
+</main>
+
+<dialog id="dlg-identity">
+  <form method="dialog">
+    <h3>Wer bist du?</h3>
+    <label>Name <input name="name" type="text" required></label>
+    <menu>
+      <button class="btn-primary" type="submit" value="ok">OK</button>
+    </menu>
+  </form>
+</dialog>
+
+<dialog id="dlg-proposal">
+  <form method="dialog">
+    <h3>Neuer Vorschlag</h3>
+    <label>Motto <input name="motto" type="text" required placeholder="Drei Tage. Eine Idee."></label>
+    <label>Überschrift <input name="headline" type="text" required></label>
+    <label>Ziele (eines pro Zeile) <textarea name="goals" rows="3"></textarea></label>
+    <label>Vision <textarea name="vision" rows="4"></textarea></label>
+    <menu>
+      <button value="cancel">Abbrechen</button>
+      <button class="btn-primary" value="ok">Speichern</button>
+    </menu>
+  </form>
+</dialog>
+
+<dialog id="dlg-session">
+  <form method="dialog">
+    <h3 id="dlg-session-title">Session</h3>
+    <input type="hidden" name="id">
+    <input type="hidden" name="slotStart">
+    <label>Titel <input name="title" type="text" required></label>
+    <label>Wer hostet? <input name="owner" type="text" required></label>
+    <label>Notizen <textarea name="notes" rows="6"></textarea></label>
+    <menu>
+      <button value="delete" class="btn-danger" data-only-existing>Löschen</button>
+      <button value="cancel">Abbrechen</button>
+      <button class="btn-primary" value="ok">Speichern</button>
+    </menu>
+  </form>
+</dialog>
+
+<div id="toast" class="toast"></div>
+<script src="assets/app.js"></script>
+</body>
+</html>
