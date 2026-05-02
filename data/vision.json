@@ -1,18 +1,4 @@
 {
-  "proposals": [
-    {
-      "id": "p7cm8xnvmoo2hvyq",
-      "author": "Sven",
-      "motto": "sdf",
-      "headline": "sdf",
-      "goals": "sdf",
-      "vision": "sdf",
-      "createdAt": "2026-05-02T08:16:08.210Z"
-    }
-  ],
-  "votes": {
-    "p7cm8xnvmoo2hvyq": [
-      "a09er38gmoo0c9nz"
-    ]
-  }
+  "proposals": [],
+  "votes": {}
 }
