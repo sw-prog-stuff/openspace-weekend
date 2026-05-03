@@ -1,3 +1,13 @@
 {
-  "sessions": []
+  "sessions": [
+    {
+      "id": "v2zm57ptmopajwrr",
+      "start": "2026-05-09T08:10:00.000Z",
+      "end": "2026-05-09T09:00:00.000Z",
+      "title": "SCRUM Teams & Master der Zukunft",
+      "owner": "Sven",
+      "notes": "Was wäre, wenn die neuen Teams nur noch aus 2-3 Menschen bestehen? Sie so unglaublich AI befähigt sind, dass man nicht mehr braucht... Wie würde sich SCRUM verändern?",
+      "createdAt": "2026-05-03T04:49:25.671Z"
+    }
+  ]
 }
