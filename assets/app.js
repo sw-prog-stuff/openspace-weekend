@@ -471,9 +471,38 @@ async function deleteProposal(id) {
   } catch (e) { toast('Löschen fehlgeschlagen: ' + e.message, true); }
 }
 
+let _fpStart, _fpEnd;
+
+function destroyPickers() {
+  if (_fpStart) { _fpStart.destroy(); _fpStart = null; }
+  if (_fpEnd) { _fpEnd.destroy(); _fpEnd = null; }
+}
+
+function buildTimeChips(cfgStart, cfgEnd) {
+  const root = $('#time-chips');
+  if (!root) return;
+  const dayLabels = ['So','Mo','Di','Mi','Do','Fr','Sa'];
+  const day = new Date(cfgStart);
+  day.setHours(0, 0, 0, 0);
+  const last = new Date(cfgEnd);
+  const chips = [];
+  while (day <= last) {
+    for (const h of [9, 11, 14, 17, 20]) {
+      const t = new Date(day);
+      t.setHours(h, 0, 0, 0);
+      if (t >= cfgStart && t <= cfgEnd) {
+        chips.push(`<button type="button" class="chip" data-time="${t.toISOString()}">${dayLabels[t.getDay()]} ${String(h).padStart(2,'0')}:00</button>`);
+      }
+    }
+    day.setDate(day.getDate() + 1);
+  }
+  root.innerHTML = chips.join('');
+}
+
 function openSessionDialog(session) {
   const dlg = $('#dlg-session');
   const f = dlg.querySelector('form');
+  destroyPickers();
   f.reset();
   $('#session-error').hidden = true;
   $('#dlg-session-title').textContent = session ? 'Session bearbeiten' : 'Neue Session';
@@ -499,18 +528,50 @@ function openSessionDialog(session) {
     dEnd = new Date(Math.min(dStart.getTime() + defaultMin * 60000, cfgEnd.getTime()));
   }
 
-  f.elements.start.value = toLocalInput(dStart.toISOString());
-  f.elements.end.value = toLocalInput(dEnd.toISOString());
-  f.elements.start.min = toLocalInput(cfgStart.toISOString());
-  f.elements.start.max = toLocalInput(cfgEnd.toISOString());
-  f.elements.end.min = toLocalInput(cfgStart.toISOString());
-  f.elements.end.max = toLocalInput(cfgEnd.toISOString());
   f.elements.title.value = session?.title || '';
   f.elements.owner.value = session?.owner || state.identity.name;
   f.elements.notes.value = session?.notes || '';
   f.querySelector('[data-only-existing]').style.display = (session && canDelete(session.owner)) ? '' : 'none';
+
+  buildTimeChips(cfgStart, cfgEnd);
   dlg.showModal();
+
+  const fpOpts = {
+    enableTime: true,
+    time_24hr: true,
+    minuteIncrement: 5,
+    locale: window.flatpickr?.l10ns?.de || 'default',
+    dateFormat: 'D, d.m.Y · H:i',
+    minDate: cfgStart,
+    maxDate: cfgEnd,
+    defaultHour: 17,
+    defaultMinute: 0,
+  };
+  _fpStart = flatpickr(f.elements.start, { ...fpOpts, defaultDate: dStart });
+  _fpEnd = flatpickr(f.elements.end, { ...fpOpts, defaultDate: dEnd });
 }
+
+document.addEventListener('click', e => {
+  const chip = e.target.closest('#time-chips [data-time]');
+  if (chip && _fpStart) {
+    const t = new Date(chip.dataset.time);
+    _fpStart.setDate(t, true);
+    if (_fpEnd) {
+      const cur = _fpEnd.selectedDates[0];
+      const min = Number(state.config?.slotMinutes) || 60;
+      const newEnd = new Date(t.getTime() + min * 60000);
+      if (!cur || cur <= t) _fpEnd.setDate(newEnd, true);
+    }
+    return;
+  }
+  const dur = e.target.closest('#duration-chips [data-dur]');
+  if (dur && _fpStart && _fpEnd) {
+    const s = _fpStart.selectedDates[0];
+    if (!s) return;
+    const minutes = Number(dur.dataset.dur);
+    _fpEnd.setDate(new Date(s.getTime() + minutes * 60000), true);
+  }
+});
 
 document.addEventListener('click', e => {
   if (e.target.id === 'btn-new-session') {
@@ -532,19 +593,23 @@ $('#dlg-session').addEventListener('close', e => {
   const f = e.target.querySelector('form');
   const fd = new FormData(f);
   const id = fd.get('id');
+  const startDate = _fpStart?.selectedDates[0];
+  const endDate = _fpEnd?.selectedDates[0];
+  destroyPickers();
   if (ret === 'delete' && id) { deleteSession(id); return; }
   if (ret !== 'ok') return;
-  const start = fd.get('start');
-  const end = fd.get('end');
-  if (!start || !end || !fd.get('title') || !fd.get('owner')) return;
-  if (new Date(start) >= new Date(end)) {
+  if (!startDate || !endDate || !fd.get('title') || !fd.get('owner')) {
+    toast('Bitte alle Felder ausfüllen', true);
+    return;
+  }
+  if (startDate >= endDate) {
     toast('Ende muss nach Start liegen', true);
     return;
   }
   saveSession({
     id: id || undefined,
-    start: new Date(start).toISOString(),
-    end: new Date(end).toISOString(),
+    start: startDate.toISOString(),
+    end: endDate.toISOString(),
     title: fd.get('title'),
     owner: fd.get('owner'),
     notes: fd.get('notes') || '',
