@@ -121,6 +121,14 @@ button:hover { color: var(--ink); border-color: var(--ink-dim); }
   transition: border-color .15s, box-shadow .15s;
 }
 .proposal:hover { border-color: rgba(0, 240, 255, 0.4); box-shadow: 0 0 24px rgba(0, 240, 255, 0.08); }
+.del-btn {
+  position: absolute; top: 0.5rem; right: 0.5rem;
+  width: 28px; height: 28px; padding: 0; line-height: 1;
+  font-size: 1.1rem; border: 1px solid var(--line);
+  color: var(--ink-dim); background: transparent;
+  border-radius: 4px; cursor: pointer;
+}
+.del-btn:hover { color: var(--danger); border-color: var(--danger); background: rgba(255,48,96,0.08); }
 .proposal .motto {
   font-size: 1.5rem; font-weight: 700; line-height: 1.15;
   background: linear-gradient(135deg, var(--cyan), var(--magenta));

@@ -206,6 +206,9 @@ function route() {
 }
 
 function voteCount(pid) { return (state.vision.votes[pid] || []).length; }
+function canDelete(authorOrOwner) {
+  return state.identity.admin || (authorOrOwner && authorOrOwner === state.identity.name);
+}
 
 function renderVision() {
   const root = $('#proposals');
@@ -220,8 +223,10 @@ function renderVision() {
     const voted = (state.vision.votes[p.id] || []).includes(state.identity.voterId);
     const goalsHtml = (p.goals || '').split('\n').map(s => s.trim()).filter(Boolean)
       .map(g => `<li>${escapeHtml(g)}</li>`).join('');
+    const delBtn = canDelete(p.author) ? `<button class="del-btn" data-del-prop="${p.id}" title="Löschen">×</button>` : '';
     return `
       <article class="proposal" data-id="${p.id}">
+        ${delBtn}
         <div class="motto">${escapeHtml(p.motto)}</div>
         <p class="headline">${escapeHtml(p.headline)}</p>
         ${goalsHtml ? `<ul class="goals">${goalsHtml}</ul>` : ''}
@@ -449,9 +454,22 @@ $('#dlg-proposal').addEventListener('close', e => {
 });
 
 $('#proposals').addEventListener('click', e => {
+  const del = e.target.closest('[data-del-prop]');
+  if (del) { deleteProposal(del.dataset.delProp); return; }
   const btn = e.target.closest('[data-vote]');
   if (btn) toggleVote(btn.dataset.vote);
 });
+
+async function deleteProposal(id) {
+  if (!confirm('Vorschlag löschen?')) return;
+  try {
+    await saveMerged('vision', v => {
+      v.proposals = (v.proposals || []).filter(x => x.id !== id);
+      if (v.votes) delete v.votes[id];
+      return v;
+    });
+  } catch (e) { toast('Löschen fehlgeschlagen: ' + e.message, true); }
+}
 
 function openSessionDialog(session) {
   const dlg = $('#dlg-session');
@@ -490,7 +508,7 @@ function openSessionDialog(session) {
   f.elements.title.value = session?.title || '';
   f.elements.owner.value = session?.owner || state.identity.name;
   f.elements.notes.value = session?.notes || '';
-  f.querySelector('[data-only-existing]').style.display = session ? '' : 'none';
+  f.querySelector('[data-only-existing]').style.display = (session && canDelete(session.owner)) ? '' : 'none';
   dlg.showModal();
 }
 
