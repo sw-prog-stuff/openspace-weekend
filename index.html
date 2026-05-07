@@ -102,7 +102,8 @@
 
 <dialog id="dlg-proposal">
   <form method="dialog">
-    <h3>Neuer Vorschlag</h3>
+    <h3 id="dlg-proposal-title">Neuer Vorschlag</h3>
+    <input type="hidden" name="id">
     <label>Motto <input name="motto" type="text" required placeholder="Drei Tage. Eine Idee."></label>
     <label>Überschrift <input name="headline" type="text" required></label>
     <label>Ziele (eines pro Zeile) <textarea name="goals" rows="3"></textarea></label>

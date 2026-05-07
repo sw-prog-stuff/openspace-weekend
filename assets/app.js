@@ -224,9 +224,10 @@ function renderVision() {
     const goalsHtml = (p.goals || '').split('\n').map(s => s.trim()).filter(Boolean)
       .map(g => `<li>${escapeHtml(g)}</li>`).join('');
     const delBtn = canDelete(p.author) ? `<button class="del-btn" data-del-prop="${p.id}" title="Löschen">×</button>` : '';
+    const editBtn = canDelete(p.author) ? `<button class="edit-btn" data-edit-prop="${p.id}" title="Bearbeiten">✎</button>` : '';
     return `
       <article class="proposal" data-id="${p.id}">
-        ${delBtn}
+        ${delBtn}${editBtn}
         <div class="motto">${escapeHtml(p.motto)}</div>
         <p class="headline">${escapeHtml(p.headline)}</p>
         ${goalsHtml ? `<ul class="goals">${goalsHtml}</ul>` : ''}
@@ -252,6 +253,18 @@ async function toggleVote(pid) {
       return v;
     });
   } catch (e) { toast('Vote-Fehler: ' + e.message, true); }
+}
+
+async function updateProposal(data) {
+  try {
+    await saveMerged('vision', v => {
+      const idx = (v.proposals || []).findIndex(x => x.id === data.id);
+      if (idx >= 0) {
+        v.proposals[idx] = { ...v.proposals[idx], motto: data.motto, headline: data.headline, goals: data.goals, vision: data.vision, updatedAt: new Date().toISOString() };
+      }
+      return v;
+    });
+  } catch (e) { toast('Speichern fehlgeschlagen: ' + e.message, true); }
 }
 
 async function addProposal(data) {
@@ -435,27 +448,43 @@ document.addEventListener('click', e => {
   }
 });
 
-$('#btn-new-proposal').addEventListener('click', () => {
+function openProposalDialog(proposal) {
   if (!state.identity.name) { openLogin(); return; }
   const dlg = $('#dlg-proposal');
-  dlg.querySelector('form').reset();
+  const f = dlg.querySelector('form');
+  f.reset();
+  $('#dlg-proposal-title').textContent = proposal ? 'Vorschlag bearbeiten' : 'Neuer Vorschlag';
+  f.elements.id.value = proposal?.id || '';
+  if (proposal) {
+    f.elements.motto.value = proposal.motto || '';
+    f.elements.headline.value = proposal.headline || '';
+    f.elements.goals.value = proposal.goals || '';
+    f.elements.vision.value = proposal.vision || '';
+  }
   dlg.showModal();
-});
+}
+
+$('#btn-new-proposal').addEventListener('click', () => openProposalDialog(null));
+
 $('#dlg-proposal').addEventListener('close', e => {
   if (e.target.returnValue !== 'ok') return;
   const fd = new FormData(e.target.querySelector('form'));
   if (!fd.get('motto') || !fd.get('headline')) return;
-  addProposal({
-    motto: fd.get('motto'),
-    headline: fd.get('headline'),
-    goals: fd.get('goals') || '',
-    vision: fd.get('vision') || '',
-  });
+  const id = fd.get('id');
+  const data = { motto: fd.get('motto'), headline: fd.get('headline'), goals: fd.get('goals') || '', vision: fd.get('vision') || '' };
+  if (id) updateProposal({ id, ...data });
+  else addProposal(data);
 });
 
 $('#proposals').addEventListener('click', e => {
   const del = e.target.closest('[data-del-prop]');
   if (del) { deleteProposal(del.dataset.delProp); return; }
+  const edit = e.target.closest('[data-edit-prop]');
+  if (edit) {
+    const p = state.vision.proposals.find(x => x.id === edit.dataset.editProp);
+    if (p) openProposalDialog(p);
+    return;
+  }
   const btn = e.target.closest('[data-vote]');
   if (btn) toggleVote(btn.dataset.vote);
 });
